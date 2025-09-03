@@ -139,28 +139,6 @@
             object-fit: cover;
         }
 
-        .placeholder-image {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            text-align: center;
-            padding: 10px;
-            word-wrap: break-word;
-        }
-
-        .campus-placeholder {
-            background-color: #a3c4bc;
-            color: #2c3e50;
-        }
-
-        .external-placeholder {
-            background-color: #e6a57e;
-            color: #2c3e50;
-        }
-
         .controls {
             display: flex;
             justify-content: center;
@@ -284,17 +262,11 @@
             Loading...
         </div>
 
-        <div class="image-grid" id="imageGrid">
-            <!-- Images will be dynamically loaded here -->
-        </div>
+        <div class="image-grid" id="imageGrid"></div>
 
         <div class="controls">
-            <button class="btn btn-primary" id="submitButton" disabled>
-                Submit Selection
-            </button>
-            <button class="btn btn-secondary" id="resetButton">
-                Reset Game
-            </button>
+            <button class="btn btn-primary" id="submitButton" disabled>Submit Selection</button>
+            <button class="btn btn-secondary" id="resetButton">Reset Game</button>
         </div>
 
         <div class="status-bar" id="statusBar">
@@ -302,7 +274,7 @@
         </div>
     </div>
 
-    <!-- Modal for messages -->
+    <!-- Modal -->
     <div class="modal" id="messageModal">
         <div class="modal-content">
             <h3 id="modalTitle">Message</h3>
@@ -314,41 +286,37 @@
     <script>
         class VerificationSystem {
             constructor() {
-                // System configuration
                 this.currentLevel = 1;
                 this.totalPoints = 0;
                 this.pointsPerCorrect = 5;
                 this.selectedImages = [];
-                
-                // Timer variables
                 this.timeRemaining = 0;
                 this.timerId = null;
-                this.timeLimits = {
-                    1: 30,    // Level 1: 30 seconds
-                    2: 60,    // Level 2: 1 minute  
-                    3: 120    // Level 3: 2 minutes
-                };
-                
-                // Image data - simulating campus and external images
-                this.allCampusImages = this.generateImageData('campus', 20);
-                this.allExternalImages = this.generateImageData('external', 30);
+                this.timeLimits = {1: 30, 2: 60, 3: 120};
+                this.allCampusImages = [];
+                this.allExternalImages = [];
                 this.currentImages = [];
-                
-                // DOM elements
+
                 this.initializeElements();
-                
-                // Start the game
-                this.loadLevel();
+                this.loadImageLists();
             }
-            
-            generateImageData(type, count) {
-                const images = [];
-                for (let i = 1; i <= count; i++) {
-                    images.push(`${type}_image_${i}.jpg`);
+
+            async loadImageLists() {
+                try {
+                    const [campusList, externalList] = await Promise.all([
+    fetch('campus_images/list.json').then(r => r.json()),
+    fetch('external_images/list.json').then(r => r.json())
+]);
+
+                    this.allCampusImages = campusList;
+                    this.allExternalImages = externalList;
+                    this.loadLevel();
+                } catch (err) {
+                    alert('Failed to load image lists. Check your folder structure.');
+                    console.error(err);
                 }
-                return images;
             }
-            
+
             initializeElements() {
                 this.headerLabel = document.getElementById('headerLabel');
                 this.instructionLabel = document.getElementById('instructionLabel');
@@ -362,213 +330,141 @@
                 this.modalTitle = document.getElementById('modalTitle');
                 this.modalMessage = document.getElementById('modalMessage');
                 this.modalButton = document.getElementById('modalButton');
-                
-                // Event listeners
+
                 this.submitButton.addEventListener('click', () => this.validateSelection());
                 this.resetButton.addEventListener('click', () => this.resetVerification());
                 this.modalButton.addEventListener('click', () => this.hideModal());
-                
-                // Close modal when clicking outside
                 this.messageModal.addEventListener('click', (e) => {
-                    if (e.target === this.messageModal) {
-                        this.hideModal();
-                    }
+                    if (e.target === this.messageModal) this.hideModal();
                 });
             }
-            
+
             loadLevel() {
-                // Clear selection and stop timer
                 this.selectedImages = [];
                 this.stopTimer();
-                
+
                 let campusCount, externalCount, gridSize, timeText;
-                
-                switch (this.currentLevel) {
-                    case 1:
-                        // Level 1: 2x2 grid with 1 campus image
-                        campusCount = 1;
-                        externalCount = 3;
-                        gridSize = '2x2';
-                        timeText = '30 seconds';
-                        this.instructionLabel.textContent = `LEVEL 1: Select the ONE campus image from the 2x2 grid below. Each correct campus image is worth 5 points. You have ${timeText}.`;
-                        this.statusBar.textContent = 'Level 1 of 3';
-                        break;
-                    case 2:
-                        // Level 2: 3x3 grid with 3 campus images
-                        campusCount = 3;
-                        externalCount = 6;
-                        gridSize = '3x3';
-                        timeText = '1 minute';
-                        this.instructionLabel.textContent = `LEVEL 2: Select all 3 campus images from the 3x3 grid below. Each correct campus image is worth 5 points. You have ${timeText}.`;
-                        this.statusBar.textContent = 'Level 2 of 3';
-                        break;
-                    case 3:
-                        // Level 3: 4x4 grid with 6 campus images
-                        campusCount = 6;
-                        externalCount = 10;
-                        gridSize = '4x4';
-                        timeText = '2 minutes';
-                        this.instructionLabel.textContent = `LEVEL 3: Select all 6 campus images from the 4x4 grid below. Each correct campus image is worth 5 points. You have ${timeText}.`;
-                        this.statusBar.textContent = 'Level 3 of 3';
-                        break;
+                if (this.currentLevel === 1) {
+                    campusCount = 1; externalCount = 3; gridSize = '2x2'; timeText = '30 seconds';
+                    this.instructionLabel.textContent = `LEVEL 1: Select the ONE campus image.`;
+                } else if (this.currentLevel === 2) {
+                    campusCount = 3; externalCount = 6; gridSize = '3x3'; timeText = '1 minute';
+                    this.instructionLabel.textContent = `LEVEL 2: Select all 3 campus images.`;
+                } else {
+                    campusCount = 6; externalCount = 10; gridSize = '4x4'; timeText = '2 minutes';
+                    this.instructionLabel.textContent = `LEVEL 3: Select all 6 campus images.`;
                 }
-                
-                // Generate random images for this level
+
                 const campusImages = this.getRandomImages(this.allCampusImages, campusCount);
                 const externalImages = this.getRandomImages(this.allExternalImages, externalCount);
-                this.currentImages = [...campusImages, ...externalImages];
+                this.currentImages = [...campusImages.map(i => ({name: i, isCampus: true})),
+                                      ...externalImages.map(i => ({name: i, isCampus: false}))];
                 this.shuffleArray(this.currentImages);
-                
-                // Display the grid
                 this.displayImageGrid(gridSize);
-                
-                // Start timer
+
                 this.timeRemaining = this.timeLimits[this.currentLevel];
                 this.updateTimerDisplay();
                 this.startTimer();
             }
-            
+
             getRandomImages(array, count) {
                 const shuffled = [...array].sort(() => 0.5 - Math.random());
                 return shuffled.slice(0, count);
             }
-            
+
             shuffleArray(array) {
                 for (let i = array.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [array[i], array[j]] = [array[j], array[i]];
                 }
             }
-            
+
             displayImageGrid(gridSize) {
-                // Clear existing grid
                 this.imageGrid.innerHTML = '';
-                
-                // Set grid class
                 this.imageGrid.className = `image-grid grid-${gridSize}`;
-                
-                // Create image cells
-                this.currentImages.forEach((imageName, index) => {
+                this.currentImages.forEach((imgObj, index) => {
                     const cell = document.createElement('div');
                     cell.className = 'image-cell';
                     cell.dataset.index = index;
-                    cell.dataset.isCampus = this.allCampusImages.includes(imageName);
-                    
-                    // Create placeholder image with color coding
-                    const placeholder = document.createElement('div');
-                    placeholder.className = `placeholder-image ${cell.dataset.isCampus === 'true' ? 'campus-placeholder' : 'external-placeholder'}`;
-                    placeholder.textContent = imageName;
-                    
-                    cell.appendChild(placeholder);
-                    
-                    // Add click event
+                    cell.dataset.isCampus = imgObj.isCampus;
+
+                    const img = document.createElement('img');
+                    img.src = imgObj.isCampus
+    ? `campus_images/${imgObj.name}`
+    : `external_images/${imgObj.name}`;
+
+
+                    cell.appendChild(img);
+
                     cell.addEventListener('click', () => this.toggleSelection(cell));
-                    
                     this.imageGrid.appendChild(cell);
                 });
-                
                 this.updateSubmitButton();
             }
-            
+
             toggleSelection(cell) {
                 const index = parseInt(cell.dataset.index);
                 const isSelected = cell.classList.contains('selected');
-                
-                // For level 1, deselect all others first (single selection)
+
                 if (this.currentLevel === 1 && !isSelected) {
-                    document.querySelectorAll('.image-cell.selected').forEach(selectedCell => {
-                        selectedCell.classList.remove('selected');
-                        const selectedIndex = parseInt(selectedCell.dataset.index);
-                        this.selectedImages = this.selectedImages.filter(i => i !== selectedIndex);
+                    document.querySelectorAll('.image-cell.selected').forEach(c => {
+                        c.classList.remove('selected');
+                        this.selectedImages = [];
                     });
                 }
-                
+
                 if (isSelected) {
-                    // Deselect
                     cell.classList.remove('selected');
                     this.selectedImages = this.selectedImages.filter(i => i !== index);
                 } else {
-                    // Select
                     cell.classList.add('selected');
                     this.selectedImages.push(index);
                 }
-                
                 this.updateSubmitButton();
             }
-            
+
             updateSubmitButton() {
                 this.submitButton.disabled = this.selectedImages.length === 0;
             }
-            
+
             validateSelection() {
                 this.stopTimer();
-                
-                // Check correctness
                 let correctSelections = 0;
-                let incorrectSelections = [];
-                
+                let incorrect = [];
+
                 this.selectedImages.forEach(index => {
                     const cell = document.querySelector(`[data-index="${index}"]`);
                     const isCampus = cell.dataset.isCampus === 'true';
-                    
-                    if (isCampus) {
-                        correctSelections++;
-                    } else {
-                        incorrectSelections.push(index);
-                        cell.classList.add('incorrect');
-                    }
+                    if (isCampus) correctSelections++;
+                    else { incorrect.push(index); cell.classList.add('incorrect'); }
                 });
-                
-                const requiredSelections = this.getRequiredSelectionCount();
+
+                const required = this.currentLevel === 1 ? 1 : this.currentLevel === 2 ? 3 : 6;
                 const levelPoints = correctSelections * this.pointsPerCorrect;
-                
                 this.totalPoints += levelPoints;
                 this.pointsLabel.textContent = `Total Points: ${this.totalPoints}`;
-                
-                if (correctSelections === requiredSelections && incorrectSelections.length === 0) {
-                    // Success
+
+                if (correctSelections === required && incorrect.length === 0) {
                     if (this.currentLevel < 3) {
-                        this.showModal(
-                            'Success!',
-                            `Level ${this.currentLevel} completed successfully!\nYou earned ${levelPoints} points!\nProceeding to Level ${this.currentLevel + 1}.`,
-                            () => {
-                                this.currentLevel++;
-                                this.loadLevel();
-                            }
-                        );
+                        this.showModal('Success!', `Level ${this.currentLevel} complete. Points: ${levelPoints}`, () => {
+                            this.currentLevel++;
+                            this.loadLevel();
+                        });
                     } else {
-                        this.showModal(
-                            'Verification Complete!',
-                            `Congratulations! You have successfully completed all levels of verification!\nFinal score: ${this.totalPoints} points!`,
-                            () => this.resetVerification()
-                        );
+                        this.showModal('Verification Complete!', `Final score: ${this.totalPoints}`, () => this.resetVerification());
                     }
                 } else {
-                    // Failure
-                    this.showModal(
-                        'Verification Failed',
-                        `Incorrect selection.\nYour final score: ${this.totalPoints} points.`,
-                        () => this.resetVerification()
-                    );
+                    this.showModal('Verification Failed', `Incorrect. Score: ${this.totalPoints}`, () => this.resetVerification());
                 }
             }
-            
-            getRequiredSelectionCount() {
-                switch (this.currentLevel) {
-                    case 1: return 1;
-                    case 2: return 3;
-                    case 3: return 6;
-                    default: return 1;
-                }
-            }
-            
+
             resetVerification() {
                 this.currentLevel = 1;
                 this.totalPoints = 0;
                 this.pointsLabel.textContent = 'Total Points: 0';
                 this.loadLevel();
             }
-            
+
             startTimer() {
                 if (this.timeRemaining > 0) {
                     this.timerId = setTimeout(() => this.updateTimer(), 1000);
@@ -576,56 +472,45 @@
                     this.timeExpired();
                 }
             }
-            
+
             updateTimer() {
                 this.timeRemaining--;
                 this.updateTimerDisplay();
-                
                 if (this.timeRemaining <= 0) {
                     this.timeExpired();
                 } else {
                     this.timerId = setTimeout(() => this.updateTimer(), 1000);
                 }
             }
-            
+
             updateTimerDisplay() {
-                const minutes = Math.floor(this.timeRemaining / 60);
-                const seconds = this.timeRemaining % 60;
-                this.timerLabel.textContent = `Time: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-                
-                // Add warning class when time is running out
-                const timeLimit = this.timeLimits[this.currentLevel];
-                if (this.timeRemaining < timeLimit * 0.2) {
-                    this.timerLabel.classList.add('warning');
-                } else {
-                    this.timerLabel.classList.remove('warning');
-                }
+                const m = Math.floor(this.timeRemaining / 60);
+                const s = this.timeRemaining % 60;
+                this.timerLabel.textContent = `Time: ${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                const limit = this.timeLimits[this.currentLevel];
+                if (this.timeRemaining < limit * 0.2) this.timerLabel.classList.add('warning');
+                else this.timerLabel.classList.remove('warning');
             }
-            
+
             stopTimer() {
                 if (this.timerId) {
                     clearTimeout(this.timerId);
                     this.timerId = null;
                 }
             }
-            
+
             timeExpired() {
                 this.stopTimer();
-                this.showModal(
-                    'Time Expired',
-                    `Time's up! You didn't complete Level ${this.currentLevel} in time.\nYour final score: ${this.totalPoints} points.`,
-                    () => this.resetVerification()
-                );
+                this.showModal('Time Expired', `Level ${this.currentLevel} failed. Score: ${this.totalPoints}`, () => this.resetVerification());
             }
-            
-            showModal(title, message, callback = null) {
+
+            showModal(title, message, cb = null) {
                 this.modalTitle.textContent = title;
                 this.modalMessage.textContent = message;
                 this.messageModal.style.display = 'block';
-                
-                this.modalCallback = callback;
+                this.modalCallback = cb;
             }
-            
+
             hideModal() {
                 this.messageModal.style.display = 'none';
                 if (this.modalCallback) {
@@ -634,11 +519,8 @@
                 }
             }
         }
-        
-        // Initialize the verification system when the page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            new VerificationSystem();
-        });
+
+        document.addEventListener('DOMContentLoaded', () => new VerificationSystem());
     </script>
 </body>
 </html>
